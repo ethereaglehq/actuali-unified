@@ -1,0 +1,306 @@
+import Foundation
+
+/// Parsed schedule recurrence config, mirroring loot-core's `_conditions.date` recurring value.
+struct RecurConfig: Equatable {
+    enum Frequency: String { case daily, weekly, monthly, yearly }
+    struct Pattern: Equatable { let type: String; let value: Int }   // type: "day" | "SU".."SA"
+
+    let frequency: Frequency
+    let interval: Int
+    let start: DayDate
+    let patterns: [Pattern]
+    let skipWeekend: Bool
+    let weekendSolveMode: String        // "before" | "after"
+    let endMode: String                 // unknown values behave as "never" (matches JS switch default)
+    let endOccurrences: Int?
+    let endDate: DayDate?
+
+    init?(json: [String: Any]) {
+        guard let f = json["frequency"] as? String, let freq = Frequency(rawValue: f),
+              let startStr = json["start"] as? String, let start = DayDate(iso: startStr)
+        else { return nil }
+        frequency = freq
+        self.start = start
+        // Absent/null interval defaults to 1 (upstream `config.interval ?? 1`),
+        // but a present non-integer value (legacy picker state stored strings)
+        // makes rSchedule throw upstream — reject rather than silently posting
+        // on interval-1 cadence.
+        switch json["interval"] {
+        case nil, is NSNull:
+            interval = 1
+        case let n as Int:
+            interval = max(1, n)
+        default:
+            return nil
+        }
+        if let raw = json["patterns"] as? [[String: Any]] {
+            var parsed: [Pattern] = []
+            for p in raw {
+                guard let t = p["type"] as? String, let v = p["value"] as? Int, v != 0,
+                      t == "day"
+                        ? abs(v) <= 31
+                        : (["SU", "MO", "TU", "WE", "TH", "FR", "SA"].contains(t) && abs(v) <= 5)
+                else { return nil }   // malformed pattern → whole config unsupported
+                parsed.append(Pattern(type: t, value: v))
+            }
+            patterns = parsed
+        } else { patterns = [] }
+        skipWeekend = json["skipWeekend"] as? Bool ?? false
+        weekendSolveMode = json["weekendSolveMode"] as? String ?? "after"
+        endMode = json["endMode"] as? String ?? "never"
+        endOccurrences = json["endOccurrences"] as? Int
+        endDate = (json["endDate"] as? String).flatMap { DayDate(iso: $0) }
+        // A bounded endMode missing its bound must not silently degrade to "recur forever".
+        if endMode == "on_date", endDate == nil { return nil }
+        if endMode == "after_n_occurrences", (endOccurrences ?? 0) <= 0 { return nil }
+    }
+}
+
+/// Pure-Swift port of loot-core's schedule recurrence math (`getNextDate`).
+enum ScheduleRecurrence {
+    private static let periodCap = 20_000
+    private static let weekdayNumber: [String: Int] = ["SU": 1, "MO": 2, "TU": 3, "WE": 4, "TH": 5, "FR": 6, "SA": 7]
+
+    /// Port of loot-core getNextDate: first occurrence on/after `target`, falling back
+    /// to the LAST occurrence if the schedule already ended. Weekend solve applies to
+    /// the final result only (may move it before `target`).
+    static func nextOccurrence(config: RecurConfig, onOrAfter target: DayDate) -> DayDate? {
+        let raw = rawNext(config: config, onOrAfter: target) ?? rawLast(config: config)
+        guard var date = raw else { return nil }
+        if config.skipWeekend, date.isWeekend {
+            date = config.weekendSolveMode == "before" ? previousFriday(from: date) : nextMonday(from: date)
+        }
+        return date
+    }
+
+    // Monthly day-patterns and weekday-patterns are SEPARATE unioned rrules,
+    // each carrying the full count/endDate independently (matches recurConfigToRSchedule).
+    private struct SubRule {
+        let config: RecurConfig
+        let kind: Kind
+        enum Kind { case plain; case daysOfMonth([Int]); case weekdays([(weekday: Int, nth: Int)]) }
+    }
+
+    private static func subRules(_ c: RecurConfig) -> [SubRule] {
+        guard c.frequency == .monthly, !c.patterns.isEmpty else { return [SubRule(config: c, kind: .plain)] }
+        var rules: [SubRule] = []
+        let days = c.patterns.filter { $0.type == "day" }.map(\.value)
+        let weekdays = c.patterns.filter { $0.type != "day" }.map { (weekday: weekdayNumber[$0.type]!, nth: $0.value) }
+        if !days.isEmpty { rules.append(SubRule(config: c, kind: .daysOfMonth(days))) }
+        if !weekdays.isEmpty { rules.append(SubRule(config: c, kind: .weekdays(weekdays))) }
+        return rules
+    }
+
+    private static func rawNext(config: RecurConfig, onOrAfter target: DayDate) -> DayDate? {
+        subRules(config).compactMap { firstOccurrence(of: $0, where: { $0 >= target }) }.min()
+    }
+
+    private static func rawLast(config: RecurConfig) -> DayDate? {
+        subRules(config).compactMap { lastOccurrence(of: $0) }.max()
+    }
+
+    private static func firstOccurrence(of rule: SubRule, where predicate: (DayDate) -> Bool) -> DayDate? {
+        var count = 0
+        var result: DayDate?
+        enumerate(rule) { date in
+            count += 1
+            if let cap = rule.config.endOccurrences, rule.config.endMode == "after_n_occurrences", count > cap { return false }
+            if let end = rule.config.endDate, rule.config.endMode == "on_date", date > end { return false }
+            if predicate(date) { result = date; return false }
+            return true
+        }
+        return result
+    }
+
+    private static func lastOccurrence(of rule: SubRule) -> DayDate? {
+        guard rule.config.endMode == "after_n_occurrences" || rule.config.endMode == "on_date" else { return nil }
+        var count = 0
+        var last: DayDate?
+        enumerate(rule) { date in
+            if let end = rule.config.endDate, rule.config.endMode == "on_date", date > end { return false }
+            count += 1
+            if let cap = rule.config.endOccurrences, rule.config.endMode == "after_n_occurrences", count > cap { return false }
+            last = date
+            return true
+        }
+        return last
+    }
+
+    /// Yields occurrences chronologically; body returns false to stop.
+    private static func enumerate(_ rule: SubRule, _ body: (DayDate) -> Bool) {
+        let c = rule.config
+        switch c.frequency {
+        case .daily:
+            var d = c.start
+            for _ in 0..<periodCap {
+                if !body(d) { return }
+                d = d.adding(days: c.interval)
+            }
+        case .weekly:
+            var d = c.start
+            for _ in 0..<periodCap {
+                if !body(d) { return }
+                d = d.adding(days: 7 * c.interval)
+            }
+        case .yearly:
+            for k in 0..<periodCap {
+                let y = c.start.year + k * c.interval
+                guard c.start.day <= DayDate.lastDay(year: y, month: c.start.month) else { continue }
+                if !body(DayDate(year: y, month: c.start.month, day: c.start.day)) { return }
+            }
+        case .monthly:
+            for k in 0..<periodCap {
+                let totalMonths = (c.start.month - 1) + k * c.interval
+                let y = c.start.year + totalMonths / 12
+                let m = totalMonths % 12 + 1
+                let lastDay = DayDate.lastDay(year: y, month: m)
+                var candidates: [DayDate] = []
+                switch rule.kind {
+                case .plain:
+                    if c.start.day <= lastDay { candidates.append(DayDate(year: y, month: m, day: c.start.day)) }
+                case .daysOfMonth(let days):
+                    for v in days {
+                        let day = v > 0 ? v : lastDay + 1 + v
+                        if (1...lastDay).contains(day) { candidates.append(DayDate(year: y, month: m, day: day)) }
+                    }
+                case .weekdays(let pairs):
+                    for (weekday, nth) in pairs {
+                        if let d = nthWeekday(year: y, month: m, weekday: weekday, nth: nth) { candidates.append(d) }
+                    }
+                }
+                for d in candidates.sorted() where d >= c.start {
+                    if !body(d) { return }
+                }
+            }
+        }
+    }
+
+    private static func nthWeekday(year: Int, month: Int, weekday: Int, nth: Int) -> DayDate? {
+        let lastDay = DayDate.lastDay(year: year, month: month)
+        if nth > 0 {
+            let first = DayDate(year: year, month: month, day: 1)
+            let offset = (weekday - first.weekday + 7) % 7
+            let day = 1 + offset + (nth - 1) * 7
+            return day <= lastDay ? DayDate(year: year, month: month, day: day) : nil
+        } else {
+            let last = DayDate(year: year, month: month, day: lastDay)
+            let offset = (last.weekday - weekday + 7) % 7
+            let day = lastDay - offset + (nth + 1) * 7
+            return day >= 1 ? DayDate(year: year, month: month, day: day) : nil
+        }
+    }
+
+    /// Where a skip starts searching, port of loot-core `skipNextDate`'s
+    /// `start` callback plus its `skipRequested` weekend branch.
+    ///
+    /// The weekend special case is upstream's and is load-bearing. With
+    /// `weekendSolveMode: "before"`, an occurrence that lands on a weekend has
+    /// already been pulled back to the Friday, so searching from "Friday + 1"
+    /// finds the same occurrence again and the skip does nothing. Jumping to
+    /// the following Monday first steps clear of it.
+    static func skipSearchStart(from nextDate: DayDate, config: RecurConfig) -> DayDate {
+        var from = nextDate
+        if config.skipWeekend, config.weekendSolveMode == "before",
+           from.weekday == 6 || from.isWeekend {
+            from = nextMonday(from: from)
+        }
+        return from.adding(days: 1)
+    }
+
+    static func nextMonday(from d: DayDate) -> DayDate {
+        var x = d
+        while x.weekday != 2 { x = x.adding(days: 1) }
+        return x
+    }
+
+    private static func previousFriday(from d: DayDate) -> DayDate {
+        var x = d
+        while x.weekday != 6 { x = x.adding(days: -1) }
+        return x
+    }
+}
+
+extension RecurConfig {
+    /// Build a config directly. `init?(json:)` stays the parsing entry point;
+    /// this is what the editor writes through.
+    init(
+        frequency: Frequency,
+        interval: Int = 1,
+        start: DayDate,
+        patterns: [Pattern] = [],
+        skipWeekend: Bool = false,
+        weekendSolveMode: String = "after",
+        endMode: String = "never",
+        endOccurrences: Int? = nil,
+        endDate: DayDate? = nil
+    ) {
+        self.frequency = frequency
+        self.interval = max(1, interval)
+        self.start = start
+        // Patterns only mean anything for a monthly recurrence; carrying them
+        // on any other frequency would change which sub-rules are generated.
+        self.patterns = frequency == .monthly ? patterns : []
+        self.skipWeekend = skipWeekend
+        self.weekendSolveMode = weekendSolveMode
+        self.endMode = endMode
+        self.endOccurrences = endOccurrences
+        self.endDate = endDate
+    }
+    
+    /// Serialize back into the shape loot-core stores inside a rule's date
+    /// condition, mirroring the picker's `unparseConfig`: interval and
+    /// occurrence counts are clamped to sane positives at the boundary, and
+    /// every field the type models is emitted so a config written here round
+    /// trips through the web unchanged.
+    var jsonObject: [String: Any] {
+        var json: [String: Any] = [
+            "start": start.iso,
+            "frequency": frequency.rawValue,
+            "interval": max(1, interval),
+            "skipWeekend": skipWeekend,
+            "weekendSolveMode": weekendSolveMode,
+            "endMode": endMode,
+        ]
+        // Patterns only mean anything for monthly recurrences; upstream omits
+        // the key entirely otherwise.
+        if !patterns.isEmpty {
+            json["patterns"] = patterns.map { pattern -> [String: Any] in
+                ["type": pattern.type, "value": pattern.value]
+            }
+        }
+        if let endOccurrences { json["endOccurrences"] = max(1, endOccurrences) }
+        if let endDate { json["endDate"] = endDate.iso }
+        return json
+    }
+}
+
+extension ScheduleRecurrence {
+    /// The next `count` occurrences on or after `today`, for the editor's
+    /// preview. Port of loot-core `schedule/get-upcoming-dates`.
+    static func upcomingDates(
+        for config: RecurConfig,
+        count: Int,
+        from today: DayDate = .today()
+    ) -> [DayDate] {
+        var dates: [DayDate] = []
+        var cursor = today
+
+        while dates.count < count {
+            guard let next = nextOccurrence(config: config, onOrAfter: cursor) else { break }
+            // `nextOccurrence` falls back to the LAST occurrence once a
+            // bounded schedule has run out, which shows up here as a date that
+            // stops advancing. Stop rather than repeat it forever.
+            //
+            // The guard below needs a previous date, so the FIRST iteration is
+            // unprotected — and `nextOccurrence` returns the last occurrence
+            // once a bounded recurrence is exhausted, rendering a past date as
+            // "next". Weekend solving can legitimately pull a date two days
+            // earlier; allow that much and no more.
+            if dates.isEmpty, next < today.adding(days: -2) { break }
+            if let previous = dates.last, next <= previous { break }
+            dates.append(next)
+            cursor = next.adding(days: 1)
+        }
+        return dates
+    }
+}
