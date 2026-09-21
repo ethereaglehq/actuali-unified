@@ -40,18 +40,24 @@ export function ConditionalPrivacyFilter({
 
 type PrivacyFilterProps = ComponentPropsWithRef<typeof View> & {
   activationFilters?: (boolean | (() => boolean))[];
+  /**
+   * Privacy mode historically skipped narrow layouts because this component
+   * was introduced for the desktop ledger. Home and other mobile surfaces
+   * can opt in now that the redaction overlay is responsive.
+   */
+  includeNarrow?: boolean;
 };
 export function PrivacyFilter({
   activationFilters,
+  includeNarrow = false,
   children,
   ...props
 }: PrivacyFilterProps) {
   const privacyMode = usePrivacyMode();
-  // Limit mobile support for now.
   const { isNarrowWidth } = useResponsive();
   const activate =
     privacyMode &&
-    !isNarrowWidth &&
+    (includeNarrow || !isNarrowWidth) &&
     (!activationFilters ||
       activationFilters.every(value =>
         typeof value === 'boolean' ? value : value(),

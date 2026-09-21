@@ -1,6 +1,8 @@
 import { useTranslation } from 'react-i18next';
 
 import {
+  SvgChatBubbleDots,
+  SvgHome,
   SvgLibrary,
   SvgReports,
   SvgTag,
@@ -31,6 +33,8 @@ export function PrimaryNav() {
         padding: `${spacing.xs}px ${spacing.sm}px 0`,
       }}
     >
+      <NavRow title={t('Home')} Icon={SvgHome} to="/home" />
+      <NavRow title={t('Ask Actuali')} Icon={SvgChatBubbleDots} to="/ask" />
       <NavRow title={t('Budget')} Icon={SvgWallet} to="/budget" />
       <NavRow title={t('Reports')} Icon={SvgReports} to="/reports" />
       <NavRow title={t('Schedules')} Icon={SvgCalendar3} to="/schedules" />

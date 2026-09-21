@@ -24,6 +24,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@actual-app/ai-bridge@workspace:packages/ai-bridge":
+  version: 0.0.0-use.local
+  resolution: "@actual-app/ai-bridge@workspace:packages/ai-bridge"
+  dependencies:
+    "@types/node": "npm:^22.20.1"
+    "@typescript/native-preview": "npm:beta"
+    vite: "npm:^8.1.5"
+    vitest: "npm:^5.0.0"
+  languageName: unknown
+  linkType: soft
+
 "@actual-app/api@workspace:*, @actual-app/api@workspace:packages/api":
   version: 0.0.0-use.local
   resolution: "@actual-app/api@workspace:packages/api"
@@ -173,6 +184,20 @@ __metadata:
     uuid: "npm:^14.0.2"
     vite: "npm:^8.1.5"
     vitest: "npm:^5.0.0"
+  languageName: unknown
+  linkType: soft
+
+"@actual-app/mcp-server@workspace:packages/mcp-server":
+  version: 0.0.0-use.local
+  resolution: "@actual-app/mcp-server@workspace:packages/mcp-server"
+  dependencies:
+    "@actual-app/api": "workspace:*"
+    "@types/node": "npm:^22.20.1"
+    "@typescript/native-preview": "npm:beta"
+    vite: "npm:^8.1.5"
+    vitest: "npm:^5.0.0"
+  bin:
+    actuali-mcp: dist/src/bin.js
   languageName: unknown
   linkType: soft
 

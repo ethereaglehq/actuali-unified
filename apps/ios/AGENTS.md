@@ -51,8 +51,8 @@ What the compiler can't guard is anything the OS resolves at runtime, so CI runs
 
 Three rules cover most of what the compiler will stop you on:
 
-- **GRDB `Row` is not `Sendable`, so it can't leave a `read`/`write` closure.** Map rows into a `Sendable` type *inside* the closure and let only that cross the boundary — a domain type where one exists (`BudgetDatabase.nearbyPayees`), otherwise a small local projection or tuple (see `BudgetDatabaseSplitTests.SplitRow`). Don't widen the closure's return to `Any`.
-- **`BudgetDatabase` keeps a strict async/sync split.** Async methods use `try await dbQueue.read`; the synchronous write path uses `try dbQueue.read` and must not suspend (`fetchNote` vs `notesTableExists`). Keep the two apart: under `NONISOLATED_NONSENDING_BY_DEFAULT` a `nonisolated async` body runs on the *caller's* actor, so a blocking DB call in an async method can now block the main thread.
+- **GRDB `Row` is not `Sendable`, so it can't leave a `read`/`write` closure.** Map rows into a `Sendable` type _inside_ the closure and let only that cross the boundary — a domain type where one exists (`BudgetDatabase.nearbyPayees`), otherwise a small local projection or tuple (see `BudgetDatabaseSplitTests.SplitRow`). Don't widen the closure's return to `Any`.
+- **`BudgetDatabase` keeps a strict async/sync split.** Async methods use `try await dbQueue.read`; the synchronous write path uses `try dbQueue.read` and must not suspend (`fetchNote` vs `notesTableExists`). Keep the two apart: under `NONISOLATED_NONSENDING_BY_DEFAULT` a `nonisolated async` body runs on the _caller's_ actor, so a blocking DB call in an async method can now block the main thread.
 - **Pure static helpers on `View` types need `nonisolated`.** They otherwise inherit `@MainActor` from the conformance, which forces `@MainActor` onto every test that calls them (`MonthPicker.title`, `ReportsTabView.resolvePageId`, `RuleIdMultiPicker.toggling`). Mark the helper, don't annotate the test. If a helper needs main-actor state it isn't pure — move it onto the model instead, as `BudgetTransferContext.rankedCategories` does.
 
 ## Architecture
@@ -98,6 +98,7 @@ The sync engine must stay byte-for-byte compatible with upstream Actual. For any
 Operate in "lazy senior dev" mode: lazy means efficient, not careless. The best code is the code never written.
 
 Before writing code, stop at the first rung that holds:
+
 1. Does this need to be built at all? (YAGNI)
 2. Does the standard library already do this? Use it.
 3. Does a native platform feature cover it? Use it.
@@ -106,6 +107,7 @@ Before writing code, stop at the first rung that holds:
 6. Only then: write the minimum code that works.
 
 Rules:
+
 - Match the style, naming, and idioms of the surrounding code. Read neighboring files before writing new ones.
 - Keep it simple (KISS): prefer the smallest change that solves the problem. No abstractions that weren't explicitly requested, no speculative feature flags or configuration for needs that don't exist yet.
 - No boilerplate nobody asked for. Deletion over addition. Boring over clever. Fewest files possible.
@@ -115,7 +117,7 @@ Rules:
 - Mark intentional simplifications with a `ponytail:` comment. If the shortcut has a known ceiling (e.g. global lock, O(n²) scan, naive heuristic), name the ceiling and the upgrade path in the comment.
 - Respect the concurrency model: UI state on `@MainActor` via `BudgetStore`; I/O and sync in `actor` services. Don't introduce ad-hoc `DispatchQueue`/`Task.detached` hops around it.
 - No dead code: don't leave commented-out blocks, unused parameters, or "just in case" branches.
-- Comments explain *why* (constraints, upstream parity, non-obvious invariants), not *what* the next line does.
+- Comments explain _why_ (constraints, upstream parity, non-obvious invariants), not _what_ the next line does.
 - Keep changes scoped: don't reformat, rename, or refactor code unrelated to the task at hand.
 - Tag new views for UI tests: `.accessibilityIdentifier()` on the elements a UI test attaches to (buttons, fields, rows), using the dotted, feature-scoped names already in the codebase (`categoryEditor.name`, `transactionRow.<id>`). Identifiers are not user-facing and stay out of the String Catalogs.
 
@@ -126,6 +128,7 @@ Rules:
 - When adding a language, update both the catalog and the Xcode `knownRegions` metadata, then extend the validator's supported locale list.
 
 Not lazy about:
+
 - Input validation at trust boundaries, error handling that prevents data loss, security, accessibility, or anything explicitly requested.
 - Lazy code without its check is unfinished: every behavior change needs test coverage (Swift Testing `@Test` / `#expect`), as the Testing section states. Do not skip the test because the change is small.
 

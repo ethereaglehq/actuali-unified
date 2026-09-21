@@ -13,7 +13,7 @@ issuer URL:
   hits the **authorization** endpoint;
 - the Actual server container hits the **token + userinfo** endpoints.
 
-If the issuer were `localhost`, the container would resolve it to *itself*.
+If the issuer were `localhost`, the container would resolve it to _itself_.
 Using `host.docker.internal` everywhere makes the same URL resolve correctly
 from both sides.
 
@@ -44,12 +44,12 @@ from both sides.
    - Open <http://host.docker.internal:5006> in a browser and set a fallback
      password (this is the bootstrap step Actual requires before OpenID).
    - Enable OpenID from the server settings and paste:
-     | Field | Value |
-     |-|-|
-     | Discovery URL | `http://host.docker.internal:5556/dex/.well-known/openid-configuration` |
-     | Client ID | `actuali` |
-     | Client secret | `actuali-test-secret` |
-     | Server hostname | `http://host.docker.internal:5006` |
+     | Field           | Value                                                                   |
+     | --------------- | ----------------------------------------------------------------------- |
+     | Discovery URL   | `http://host.docker.internal:5556/dex/.well-known/openid-configuration` |
+     | Client ID       | `actuali`                                                               |
+     | Client secret   | `actuali-test-secret`                                                   |
+     | Server hostname | `http://host.docker.internal:5006`                                      |
 
 5. **Verify** the app will see OpenID:
 
@@ -81,10 +81,10 @@ docker compose down -v   # -v also wipes the Actual data volume
 
 ## The test user
 
-| Field | Value |
-|-|-|
-| Email | `test@example.com` |
-| Password | `password` |
+| Field    | Value              |
+| -------- | ------------------ |
+| Email    | `test@example.com` |
+| Password | `password`         |
 
 Edit `dex-config.yaml` to add more users (`hash` is bcrypt; generate with
 `htpasswd -bnBC 10 "" <password> | tr -d ':\n'`).

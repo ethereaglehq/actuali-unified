@@ -10,7 +10,7 @@ const salt = crypto.randomBytes(32).toString('base64');
 // CRITICAL: salt fed to PBKDF2 is the UTF-8 bytes of the base64 string (Buffer.from(salt)).
 const derivedKey = crypto.pbkdf2Sync(
   Buffer.from(password, 'utf8'),
-  Buffer.from(salt),          // <-- utf8 bytes of the base64 string, NOT base64-decoded
+  Buffer.from(salt), // <-- utf8 bytes of the base64 string, NOT base64-decoded
   10000,
   32,
   'sha512',

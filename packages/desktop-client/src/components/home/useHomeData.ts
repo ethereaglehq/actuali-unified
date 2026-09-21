@@ -1,13 +1,14 @@
 import { useMemo } from 'react';
 
+import * as monthUtils from '@actual-app/core/shared/months';
 import { q } from '@actual-app/core/shared/query';
 import type { TransactionEntity } from '@actual-app/core/types/models';
 
-import { useAccountBalances } from '#hooks/useAccountBalances';
 import { useAccounts } from '#hooks/useAccounts';
 import { usePayees } from '#hooks/usePayees';
 import { useSheetValue } from '#hooks/useSheetValue';
 import { useSyncServerStatus } from '#hooks/useSyncServerStatus';
+import { useSyncStatus } from '#hooks/useSyncStatus';
 import { useTransactions } from '#hooks/useTransactions';
 import {
   allAccountBalance,
@@ -16,16 +17,39 @@ import {
 } from '#spreadsheet/bindings';
 
 export type HomeData = {
+  accounts: NonNullable<ReturnType<typeof useAccounts>['data']>;
   activeAccounts: NonNullable<ReturnType<typeof useAccounts>['data']>;
-  accountBalances: Record<string, number | null>;
   allBalance: number | null;
   onBudgetBalance: number | null;
   offBudgetBalance: number | null;
   recentTransactions: ReadonlyArray<TransactionEntity>;
   payees: NonNullable<ReturnType<typeof usePayees>['data']>;
   isLoading: boolean;
+  isError: boolean;
+  retry: () => Promise<void>;
   syncStatus: ReturnType<typeof useSyncServerStatus>;
+  isSyncing: boolean;
+  syncState: ReturnType<typeof useSyncStatus>['syncState'];
 };
+
+/**
+ * Home is a resilient summary surface. A legacy or partially imported row
+ * should never take down the entire page just because its date is malformed.
+ */
+export function formatHomeDate(
+  date: unknown,
+  dateFormat: string,
+): string | null {
+  if (typeof date !== 'string' || !monthUtils.isValidYearMonthDay(date)) {
+    return null;
+  }
+
+  try {
+    return monthUtils.format(date, dateFormat);
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Shared read model for the mobile and desktop home surfaces.
@@ -36,16 +60,17 @@ export type HomeData = {
 export function useHomeData(): HomeData {
   const accountsQuery = useAccounts();
   const payeesQuery = usePayees();
-  const accounts = accountsQuery.data ?? [];
+  const accountsData = accountsQuery.data;
+  const accounts = accountsData ?? [];
   const activeAccounts = useMemo(
-    () => accounts.filter(account => !account.closed),
-    [accounts],
+    () => (accountsData ?? []).filter(account => !account.closed),
+    [accountsData],
   );
-  const accountBalances = useAccountBalances(activeAccounts.map(a => a.id));
   const recentTransactionsQuery = useMemo(
     () =>
       q('transactions')
         .options({ splits: 'grouped' })
+        .select('*')
         .filter({ is_child: false })
         .orderBy({ date: 'desc' }),
     [],
@@ -54,10 +79,21 @@ export function useHomeData(): HomeData {
     query: recentTransactionsQuery,
     options: { pageSize: 7 },
   });
+  const { isSyncing, syncState } = useSyncStatus();
+
+  const isError =
+    accountsQuery.isError || payeesQuery.isError || transactionsQuery.isError;
+  const retry = async () => {
+    await Promise.all([
+      accountsQuery.refetch(),
+      payeesQuery.refetch(),
+      transactionsQuery.refetch(),
+    ]);
+  };
 
   return {
+    accounts,
     activeAccounts,
-    accountBalances,
     allBalance: useSheetValue<'account', 'accounts-balance'>(
       allAccountBalance(),
     ),
@@ -73,6 +109,10 @@ export function useHomeData(): HomeData {
       accountsQuery.isPending ||
       payeesQuery.isPending ||
       transactionsQuery.isPending,
+    isError,
+    retry,
     syncStatus: useSyncServerStatus(),
+    isSyncing,
+    syncState,
   };
 }

@@ -263,6 +263,7 @@ type AccountInternalProps = {
   onUnlinkAccount: (id: AccountEntity['id']) => void;
   onSyncAndDownload: (accountId?: AccountEntity['id']) => void;
   onCreatePayee: (name: PayeeEntity['name']) => Promise<PayeeEntity['id']>;
+  initialIsAdding?: boolean;
 };
 
 type AccountInternalState = {
@@ -331,7 +332,7 @@ class AccountInternal extends PureComponent<
       showCleared: props.showCleared,
       showReconciled: props.showReconciled,
       nameError: '',
-      isAdding: false,
+      isAdding: props.initialIsAdding ?? false,
       sort: null,
       filteredAmount: null,
     };
@@ -2076,6 +2077,7 @@ export function Account() {
   const modalShowing = useSelector(state => state.modals.modalStack.length > 0);
   const accountsSyncing = useSelector(state => state.account.accountsSyncing);
   const filterConditions = location?.state?.filterConditions || [];
+  const initialIsAdding = location?.state?.openAddTransaction === true;
 
   const savedFiters = useTransactionFilters();
 
@@ -2143,6 +2145,7 @@ export function Account() {
             onUnlinkAccount={onUnlinkAccount}
             onSyncAndDownload={onSyncAndDownload}
             onCreatePayee={onCreatePayee}
+            initialIsAdding={initialIsAdding}
           />
         </SplitsExpandedProvider>
       </SchedulesProvider>

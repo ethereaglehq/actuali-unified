@@ -1,3 +1,4 @@
+export { AskActualiPage as AskActuali } from '#components/desktop/AskActualiPage';
 export { DesktopHomePage as Home } from '#components/desktop/DesktopHomePage';
 export { Budget } from '#components/budget';
 

@@ -24,21 +24,32 @@
 //
 // Run from the repo root, with an actualbudget/actual checkout in ./actual:
 //   node dev/scripts/gen-blank-budget.mjs [path-to-actual] [output-path]
-import { copyFileSync, mkdtempSync, readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import {
+  copyFileSync,
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { registerHooks } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
+import { pathToFileURL } from 'node:url';
 
 const actualRepo = path.resolve(process.argv[2] ?? 'actual');
-const outPath = path.resolve(process.argv[3] ?? 'Actuali/Actuali/Resources/blank-budget.sqlite');
+const outPath = path.resolve(
+  process.argv[3] ?? 'Actuali/Actuali/Resources/blank-budget.sqlite',
+);
 const lootCore = path.join(actualRepo, 'packages', 'loot-core');
 const migrationsDir = path.join(lootCore, 'migrations');
 
 if (!existsSync(path.join(lootCore, 'default-db.sqlite'))) {
-  console.error(`No loot-core at ${lootCore} — pass the path to an actualbudget/actual checkout.`);
+  console.error(
+    `No loot-core at ${lootCore} — pass the path to an actualbudget/actual checkout.`,
+  );
   process.exit(1);
 }
 
@@ -48,8 +59,10 @@ if (!existsSync(path.join(lootCore, 'default-db.sqlite'))) {
 // node_modules. randomUUID is a v4 UUID, so the stub is behavior-identical.
 const stubDir = mkdtempSync(path.join(tmpdir(), 'uuid-stub-'));
 const uuidStubPath = path.join(stubDir, 'uuid.mjs');
-writeFileSync(uuidStubPath,
-  "import { randomUUID } from 'node:crypto';\nexport const v4 = () => randomUUID();\n");
+writeFileSync(
+  uuidStubPath,
+  "import { randomUUID } from 'node:crypto';\nexport const v4 = () => randomUUID();\n",
+);
 registerHooks({
   resolve(specifier, context, nextResolve) {
     if (specifier === 'uuid') {
@@ -76,7 +89,9 @@ const dbInterface = {
     const info = stmt.run(...params);
     return { changes: info.changes, insertId: info.lastInsertRowid };
   },
-  execQuery(sql) { db.exec(sql); },
+  execQuery(sql) {
+    db.exec(sql);
+  },
   transaction(fn) {
     db.exec('BEGIN TRANSACTION');
     try {
@@ -93,30 +108,44 @@ const dbInterface = {
 // only { id, budgetName } (prefs.getDefaultPrefs), so it moves nothing.
 const budgetDir = mkdtempSync(path.join(tmpdir(), 'blank-budget-'));
 const fileId = 'blank';
-writeFileSync(path.join(budgetDir, 'metadata.json'),
-  JSON.stringify({ id: fileId, budgetName: 'Blank' }));
-const fsStub = { getBudgetDir: () => budgetDir, join: path.join, readFile };
+writeFileSync(
+  path.join(budgetDir, 'metadata.json'),
+  JSON.stringify({ id: fileId, budgetName: 'Blank' }),
+);
+const joinPath = (...segments) => path.join(...segments);
+const fsStub = { getBudgetDir: () => budgetDir, join: joinPath, readFile };
 
 for (const name of migrations) {
   if (name.endsWith('.js')) {
-    const { default: run } = await import(pathToFileURL(path.join(migrationsDir, name)));
+    const { default: run } = await import(
+      pathToFileURL(path.join(migrationsDir, name))
+    );
     await run(dbInterface, { fs: fsStub, fileId });
   } else {
     db.exec(readFileSync(path.join(migrationsDir, name), 'utf8'));
   }
-  db.prepare('INSERT INTO __migrations__ (id) VALUES (?)').run(migrationId(name));
+  db.prepare('INSERT INTO __migrations__ (id) VALUES (?)').run(
+    migrationId(name),
+  );
 }
 
 // Sanity: applied ids must be exactly the migration list, in order (the prefix
 // property desktop's checkDatabaseValidity requires), and the file intact.
-const applied = db.prepare('SELECT id FROM __migrations__ ORDER BY id ASC').all().map(r => r.id);
+const applied = db
+  .prepare('SELECT id FROM __migrations__ ORDER BY id ASC')
+  .all()
+  .map(r => r.id);
 const expected = migrations.map(migrationId);
 if (JSON.stringify(applied) !== JSON.stringify(expected)) {
   throw new Error('applied migrations do not match the migration list');
 }
 const integrity = db.prepare('PRAGMA integrity_check').get();
-if (integrity.integrity_check !== 'ok') throw new Error('integrity check failed');
+if (integrity.integrity_check !== 'ok') {
+  throw new Error('integrity check failed');
+}
 db.exec('VACUUM');
 db.close();
 
-console.log(`Applied ${applied.length} migrations (through ${applied.at(-1)}) -> ${outPath}`);
+console.log(
+  `Applied ${applied.length} migrations (through ${String(applied.at(-1))}) -> ${outPath}`,
+);

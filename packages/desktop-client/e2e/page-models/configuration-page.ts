@@ -17,6 +17,8 @@ export class ConfigurationPage {
     await this.page
       .getByRole('button', { name: 'Try the demo', exact: true })
       .click();
+    await this.page.waitForURL('**/home');
+    await this.page.goto('/budget');
     const budgetPage = new BudgetPage(this.page);
     // Wait for the budget page to be fully mounted before returning so
     // callers don't race the virtualized budget-table's layout step.
@@ -26,6 +28,8 @@ export class ConfigurationPage {
 
   async createDemoFile() {
     await this.page.getByRole('button', { name: 'Try the demo' }).click();
+    await this.page.waitForURL('**/home');
+    await this.page.goto('/budget');
     const budgetPage = new BudgetPage(this.page);
     await budgetPage.waitFor();
     return budgetPage;
@@ -49,6 +53,8 @@ export class ConfigurationPage {
 
   async startFresh() {
     await this.page.getByRole('button', { name: 'Start budgeting' }).click();
+    await this.page.waitForURL('**/home');
+    await this.page.goto('/budget');
 
     const budgetPage = new BudgetPage(this.page);
     await budgetPage.waitFor();

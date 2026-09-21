@@ -9,13 +9,13 @@ also downscaled, so the README doesn't pull four 1320×2868 PNGs.
 
 ## Files
 
-| File | Derived from | How |
-|-|-|-|
-| `icon.png` | `assets/icons/actuali-appicon-1024.png` | 256×256, 58px rounded corners |
-| `view-accounts.png` | `website/public/screenshots/view-accounts.png` | 440×956, 32px rounded corners |
-| `add-transactions.png` | `website/public/screenshots/add-transactions.png` | ditto |
-| `view-budgets.png` | `website/public/screenshots/view-budgets.png` | ditto |
-| `reports-dark-light.png` | `website/public/screenshots/reports-dark-light.png` | ditto |
+| File                     | Derived from                                        | How                           |
+| ------------------------ | --------------------------------------------------- | ----------------------------- |
+| `icon.png`               | `assets/icons/actuali-appicon-1024.png`             | 256×256, 58px rounded corners |
+| `view-accounts.png`      | `website/public/screenshots/view-accounts.png`      | 440×956, 32px rounded corners |
+| `add-transactions.png`   | `website/public/screenshots/add-transactions.png`   | ditto                         |
+| `view-budgets.png`       | `website/public/screenshots/view-budgets.png`       | ditto                         |
+| `reports-dark-light.png` | `website/public/screenshots/reports-dark-light.png` | ditto                         |
 
 ## Regenerating
 

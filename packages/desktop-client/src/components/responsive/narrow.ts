@@ -1,3 +1,4 @@
+export { MobileAskActualiPage as AskActuali } from '#components/mobile/ai/MobileAskActualiPage';
 export { MobileHomePage as Home } from '#components/mobile/home/MobileHomePage';
 export { BudgetPage as Budget } from '#components/mobile/budget/BudgetPage';
 

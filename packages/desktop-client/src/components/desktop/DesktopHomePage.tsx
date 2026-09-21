@@ -1,13 +1,14 @@
-import React from 'react';
-import { useTranslation } from 'react-i18next';
+import type { ReactNode } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
 
 import { Button } from '@actual-app/components/button';
 import {
   SvgAdd,
   SvgArrowThinRight,
+  SvgChatBubbleDots,
+  SvgRefresh,
   SvgReports,
 } from '@actual-app/components/icons/v1';
-import { SvgRefresh } from '@actual-app/components/icons/v1';
 import { styles } from '@actual-app/components/styles';
 import { Text } from '@actual-app/components/text';
 import { TextOneLine } from '@actual-app/components/text-one-line';
@@ -15,10 +16,12 @@ import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
 import { css } from '@emotion/css';
 
+import { formatHomeDate, useHomeData } from '#components/home/useHomeData';
 import { PageHeader } from '#components/Page';
+import { PrivacyFilter } from '#components/PrivacyFilter';
+import { useDateFormat } from '#hooks/useDateFormat';
 import { useFormat } from '#hooks/useFormat';
 import { useNavigate } from '#hooks/useNavigate';
-import { useHomeData } from '../home/useHomeData';
 
 const panelClass = css({
   backgroundColor: theme.tableBackground,
@@ -26,11 +29,30 @@ const panelClass = css({
   borderRadius: 12,
 });
 
+const actionClass = css({
+  transition: 'transform 160ms ease, box-shadow 160ms ease',
+  '&:hover': {
+    transform: 'translateY(-1px)',
+    boxShadow: styles.cardShadow,
+  },
+  '&:active': {
+    transform: 'translateY(0)',
+  },
+  '@media (prefers-reduced-motion: reduce)': {
+    transition: 'none',
+    '&:hover, &:active': {
+      transform: 'none',
+    },
+  },
+});
+
 export function DesktopHomePage() {
   const { t } = useTranslation();
   const format = useFormat();
+  const dateFormat = useDateFormat() || 'MM/dd/yyyy';
   const navigate = useNavigate();
   const {
+    accounts,
     activeAccounts,
     allBalance,
     onBudgetBalance,
@@ -38,9 +60,16 @@ export function DesktopHomePage() {
     recentTransactions,
     payees,
     isLoading,
+    isError,
+    retry,
     syncStatus,
+    isSyncing,
+    syncState,
   } = useHomeData();
   const payeeNames = new Map(payees.map(payee => [payee.id, payee.name]));
+  const accountNames = new Map(
+    accounts.map(account => [account.id, account.name]),
+  );
 
   return (
     <View
@@ -75,18 +104,32 @@ export function DesktopHomePage() {
                 marginTop: 6,
               }}
             >
-              {syncStatus === 'online'
-                ? t('Everything is up to date across your devices.')
-                : t('Working from your local copy.')}
+              {isSyncing
+                ? t('Syncing your latest changes…')
+                : syncState === 'error'
+                  ? t('Sync needs attention. Your local changes are safe.')
+                  : syncState === 'disabled'
+                    ? t('Sync is disabled. Changes stay on this device.')
+                    : syncStatus === 'online'
+                      ? t(
+                          'Connected to sync server. Changes sync when available.',
+                        )
+                      : t('Working from your local copy.')}
             </Text>
           </View>
           <Button
             variant="primary"
-            onPress={() => void navigate('/transactions/new')}
+            onPress={() =>
+              void navigate('/accounts', {
+                state: { openAddTransaction: true },
+              })
+            }
             style={{ minHeight: 40, gap: 8 }}
           >
             <SvgAdd width={18} height={18} />
-            <Text style={{ fontWeight: 700 }}>{t('Add transaction')}</Text>
+            <Text style={{ fontWeight: 700 }}>
+              <Trans>Add transaction</Trans>
+            </Text>
           </Button>
         </View>
 
@@ -112,40 +155,52 @@ export function DesktopHomePage() {
                   color: theme.mobileHeaderTextSubdued,
                 }}
               >
-                {t('Total across active accounts')}
+                <Trans>Total across active accounts</Trans>
               </Text>
-              <Text
-                style={{
-                  ...styles.tnum,
-                  color: theme.mobileHeaderText,
-                  fontSize: 38,
-                  fontWeight: 700,
-                  marginTop: 5,
-                }}
-              >
-                {allBalance == null ? '—' : format(allBalance, 'financial')}
-              </Text>
+              <PrivacyFilter includeNarrow>
+                <Text
+                  style={{
+                    ...styles.tnum,
+                    color: theme.mobileHeaderText,
+                    fontSize: 38,
+                    fontWeight: 700,
+                    marginTop: 5,
+                  }}
+                >
+                  {allBalance == null ? '—' : format(allBalance, 'financial')}
+                </Text>
+              </PrivacyFilter>
             </View>
             <View
               style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
             >
               <View
+                aria-hidden="true"
                 style={{
                   width: 8,
                   height: 8,
                   borderRadius: 8,
                   backgroundColor:
-                    syncStatus === 'online'
+                    syncStatus === 'online' &&
+                    syncState !== 'disabled' &&
+                    syncState !== 'local' &&
+                    syncState !== 'error'
                       ? theme.numberPositive
                       : theme.warningText,
                 }}
               />
               <Text style={{ color: theme.mobileHeaderText, fontWeight: 600 }}>
-                {syncStatus === 'online'
-                  ? t('Synced')
-                  : syncStatus === 'offline'
-                    ? t('Offline')
-                    : t('Local only')}
+                {isSyncing
+                  ? t('Syncing')
+                  : syncState === 'error'
+                    ? t('Needs attention')
+                    : syncState === 'disabled'
+                      ? t('Sync disabled')
+                      : syncStatus === 'online'
+                        ? t('Connected')
+                        : syncStatus === 'offline'
+                          ? t('Offline')
+                          : t('Local only')}
               </Text>
             </View>
           </View>
@@ -166,6 +221,7 @@ export function DesktopHomePage() {
             label={t('Active accounts')}
             value={activeAccounts.length}
             format={value => String(value ?? 0)}
+            isCurrency={false}
           />
         </View>
 
@@ -188,7 +244,7 @@ export function DesktopHomePage() {
               }}
             >
               <Text style={{ fontSize: 17, fontWeight: 700 }}>
-                {t('Recent activity')}
+                <Trans>Recent activity</Trans>
               </Text>
               <Button
                 variant="bare"
@@ -196,7 +252,7 @@ export function DesktopHomePage() {
                 style={{ minHeight: 32 }}
               >
                 <Text style={{ color: theme.pageTextLink, fontWeight: 600 }}>
-                  {t('View all')}
+                  <Trans>View all</Trans>
                 </Text>
                 <SvgArrowThinRight
                   width={15}
@@ -206,18 +262,24 @@ export function DesktopHomePage() {
               </Button>
             </View>
             {isLoading && <ActivityLoading />}
-            {!isLoading && recentTransactions.length === 0 && (
+            {isError && <ActivityError onRetry={retry} />}
+            {!isLoading && !isError && recentTransactions.length === 0 && (
               <Text style={{ padding: 24, color: theme.pageTextLight }}>
-                {t('No transactions yet.')}
+                <Trans>No transactions yet.</Trans>
               </Text>
             )}
             {!isLoading &&
+              !isError &&
               recentTransactions.slice(0, 7).map((transaction, index) => (
                 <Button
                   key={transaction.id}
                   variant="bare"
                   onPress={() =>
-                    void navigate(`/transactions/${transaction.id}`)
+                    void navigate(
+                      transaction.account
+                        ? `/accounts/${transaction.account}`
+                        : '/accounts',
+                    )
                   }
                   style={{
                     width: '100%',
@@ -246,25 +308,29 @@ export function DesktopHomePage() {
                         marginTop: 2,
                       }}
                     >
-                      {transaction.date} ·{' '}
-                      {activeAccounts.find(
-                        account => account.id === transaction.account,
-                      )?.name || t('Account')}
+                      {formatHomeDate(transaction.date, dateFormat) ||
+                        t('Unknown date')}{' '}
+                      ·{' '}
+                      {(transaction.account &&
+                        accountNames.get(transaction.account)) ||
+                        t('Account')}
                     </Text>
                   </View>
-                  <Text
-                    style={{
-                      ...styles.tnum,
-                      fontWeight: 600,
-                      color:
-                        transaction.amount >= 0
-                          ? theme.numberPositive
-                          : theme.pageText,
-                      marginLeft: 16,
-                    }}
-                  >
-                    {format(transaction.amount, 'financial-with-sign')}
-                  </Text>
+                  <PrivacyFilter includeNarrow>
+                    <Text
+                      style={{
+                        ...styles.tnum,
+                        fontWeight: 600,
+                        color:
+                          transaction.amount >= 0
+                            ? theme.numberPositive
+                            : theme.pageText,
+                        marginLeft: 16,
+                      }}
+                    >
+                      {format(transaction.amount, 'financial-with-sign')}
+                    </Text>
+                  </PrivacyFilter>
                 </Button>
               ))}
           </View>
@@ -272,7 +338,7 @@ export function DesktopHomePage() {
           <View style={{ width: 340, gap: 14 }}>
             <View className={panelClass} style={{ padding: 18 }}>
               <Text style={{ fontSize: 17, fontWeight: 700 }}>
-                {t('Keep moving')}
+                <Trans>Keep moving</Trans>
               </Text>
               <Text
                 style={{
@@ -281,7 +347,7 @@ export function DesktopHomePage() {
                   marginTop: 5,
                 }}
               >
-                {t('Shortcuts for the work you do most.')}
+                <Trans>Shortcuts for the work you do most.</Trans>
               </Text>
               <DesktopAction
                 label={t('Plan this month')}
@@ -298,6 +364,11 @@ export function DesktopHomePage() {
                 icon={<SvgReports width={17} height={17} />}
                 onPress={() => void navigate('/reports')}
               />
+              <DesktopAction
+                label={t('Ask Actuali')}
+                icon={<SvgChatBubbleDots width={17} height={17} />}
+                onPress={() => void navigate('/ask')}
+              />
             </View>
             <View className={panelClass} style={{ padding: 18 }}>
               <View
@@ -308,7 +379,9 @@ export function DesktopHomePage() {
                   height={16}
                   style={{ color: theme.pageTextLight }}
                 />
-                <Text style={{ fontWeight: 700 }}>{t('Sync health')}</Text>
+                <Text style={{ fontWeight: 700 }}>
+                  <Trans>Sync health</Trans>
+                </Text>
               </View>
               <Text
                 style={{
@@ -317,11 +390,19 @@ export function DesktopHomePage() {
                   marginTop: 7,
                 }}
               >
-                {syncStatus === 'online'
-                  ? t('Local changes are syncing automatically.')
-                  : syncStatus === 'offline'
-                    ? t('You are offline. Nothing will be lost.')
-                    : t('This budget is stored on this device only.')}
+                {isSyncing
+                  ? t('Syncing your latest changes…')
+                  : syncState === 'error'
+                    ? t('Sync needs attention. Your local changes are safe.')
+                    : syncState === 'disabled'
+                      ? t('Sync is disabled. Changes stay on this device.')
+                      : syncStatus === 'online'
+                        ? t(
+                            'Connected to sync server. Changes sync when available.',
+                          )
+                        : syncStatus === 'offline'
+                          ? t('You are offline. Nothing will be lost.')
+                          : t('This budget is stored on this device only.')}
               </Text>
               <Button
                 variant="bare"
@@ -329,7 +410,7 @@ export function DesktopHomePage() {
                 style={{ padding: 0, minHeight: 34, marginTop: 10 }}
               >
                 <Text style={{ color: theme.pageTextLink, fontWeight: 600 }}>
-                  {t('Manage sync settings')}
+                  <Trans>Manage sync settings</Trans>
                 </Text>
               </Button>
             </View>
@@ -344,26 +425,32 @@ function BalancePanel({
   label,
   value,
   format,
+  isCurrency = true,
 }: {
   label: string;
   value: number | null;
   format: (value: unknown, type?: 'financial') => string;
+  isCurrency?: boolean;
 }) {
   return (
     <View className={panelClass} style={{ flex: 1, padding: 17 }}>
       <Text style={{ ...styles.smallText, color: theme.pageTextLight }}>
         {label}
       </Text>
-      <Text
-        style={{ ...styles.tnum, fontSize: 19, fontWeight: 700, marginTop: 7 }}
-      >
-        {format(
-          value,
-          typeof value === 'number' && label !== 'Active accounts'
-            ? 'financial'
-            : undefined,
-        )}
-      </Text>
+      <PrivacyFilter includeNarrow>
+        <Text
+          style={{
+            ...styles.tnum,
+            fontSize: 19,
+            fontWeight: 700,
+            marginTop: 7,
+          }}
+        >
+          {value == null
+            ? '—'
+            : format(value, isCurrency ? 'financial' : undefined)}
+        </Text>
+      </PrivacyFilter>
     </View>
   );
 }
@@ -374,11 +461,12 @@ function DesktopAction({
   onPress,
 }: {
   label: string;
-  icon: React.ReactNode;
+  icon: ReactNode;
   onPress: () => void;
 }) {
   return (
     <Button
+      className={actionClass}
       variant="bare"
       onPress={onPress}
       style={{
@@ -402,11 +490,29 @@ function DesktopAction({
   );
 }
 
+function ActivityError({ onRetry }: { onRetry: () => Promise<void> }) {
+  return (
+    <View style={{ padding: 24, gap: 9 }}>
+      <Text style={{ color: theme.pageTextLight }}>
+        <Trans>We couldn't load your latest activity.</Trans>
+      </Text>
+      <Button
+        variant="bare"
+        onPress={() => void onRetry()}
+        style={{ padding: 0, minHeight: 34, alignSelf: 'flex-start' }}
+      >
+        <Text style={{ color: theme.pageTextLink, fontWeight: 600 }}>
+          <Trans>Try again</Trans>
+        </Text>
+      </Button>
+    </View>
+  );
+}
+
 function ActivityLoading() {
-  const { t } = useTranslation();
   return (
     <Text style={{ padding: 24, color: theme.pageTextLight }}>
-      {t('Loading…')}
+      <Trans>Loading…</Trans>
     </Text>
   );
 }

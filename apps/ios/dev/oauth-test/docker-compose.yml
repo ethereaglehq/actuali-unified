@@ -11,16 +11,16 @@
 services:
   actual:
     image: actualbudget/actual-server:latest
-    ports: ["5006:5006"]
-    extra_hosts: ["host.docker.internal:host-gateway"]
-    volumes: ["actual-data:/data"]
+    ports: ['5006:5006']
+    extra_hosts: ['host.docker.internal:host-gateway']
+    volumes: ['actual-data:/data']
     restart: unless-stopped
 
   dex:
     image: ghcr.io/dexidp/dex:latest
-    command: ["dex", "serve", "/etc/dex/config.yaml"]
-    ports: ["5556:5556"]
-    volumes: ["./dex-config.yaml:/etc/dex/config.yaml:ro"]
+    command: ['dex', 'serve', '/etc/dex/config.yaml']
+    ports: ['5556:5556']
+    volumes: ['./dex-config.yaml:/etc/dex/config.yaml:ro']
     restart: unless-stopped
 
 volumes:

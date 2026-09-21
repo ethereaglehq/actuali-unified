@@ -1,14 +1,16 @@
-import React, { useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
+import { useMemo } from 'react';
+import type { ReactNode } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
 
 import { Button } from '@actual-app/components/button';
 import {
   SvgAdd,
   SvgArrowThinRight,
+  SvgChatBubbleDots,
   SvgHome,
+  SvgRefresh,
   SvgReports,
 } from '@actual-app/components/icons/v1';
-import { SvgRefresh } from '@actual-app/components/icons/v1';
 import { styles } from '@actual-app/components/styles';
 import { Text } from '@actual-app/components/text';
 import { TextOneLine } from '@actual-app/components/text-one-line';
@@ -16,10 +18,12 @@ import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
 import { css } from '@emotion/css';
 
+import { formatHomeDate, useHomeData } from '#components/home/useHomeData';
 import { MobilePageHeader, Page } from '#components/Page';
+import { PrivacyFilter } from '#components/PrivacyFilter';
+import { useDateFormat } from '#hooks/useDateFormat';
 import { useFormat } from '#hooks/useFormat';
 import { useNavigate } from '#hooks/useNavigate';
-import { useHomeData } from '../../home/useHomeData';
 
 const surfaceClass = css({
   border: `1px solid ${theme.tableBorder}`,
@@ -27,14 +31,53 @@ const surfaceClass = css({
   backgroundColor: theme.tableBackground,
 });
 
-function SyncPill({ status }: { status: 'offline' | 'no-server' | 'online' }) {
+const actionClass = css({
+  transition: 'transform 160ms ease, box-shadow 160ms ease',
+  '&:hover': {
+    transform: 'translateY(-1px)',
+    boxShadow: styles.cardShadow,
+  },
+  '&:active': {
+    transform: 'translateY(0)',
+  },
+  '@media (prefers-reduced-motion: reduce)': {
+    transition: 'none',
+    '&:hover, &:active': {
+      transform: 'none',
+    },
+  },
+});
+
+function SyncPill({
+  status,
+  isSyncing,
+  syncState,
+}: {
+  status: 'offline' | 'no-server' | 'online';
+  isSyncing: boolean;
+  syncState: 'offline' | 'local' | 'disabled' | 'error' | null;
+}) {
   const { t } = useTranslation();
-  const copy = {
-    online: t('Synced across your devices'),
-    offline: t('Offline · changes saved locally'),
-    'no-server': t('Local-only mode'),
-  }[status];
-  const color = status === 'online' ? theme.numberPositive : theme.warningText;
+  const copy = isSyncing
+    ? t('Syncing changes…')
+    : syncState === 'error'
+      ? t('Sync needs attention')
+      : syncState === 'disabled'
+        ? t('Sync disabled · local changes only')
+        : syncState === 'offline' || status === 'offline'
+          ? t('Offline · changes saved locally')
+          : syncState === 'local' || status === 'no-server'
+            ? t('Local-only mode')
+            : t('Connected to sync server');
+  const color =
+    isSyncing ||
+    syncState === 'error' ||
+    syncState === 'disabled' ||
+    syncState === 'local'
+      ? theme.warningText
+      : status === 'online'
+        ? theme.numberPositive
+        : theme.warningText;
 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -64,17 +107,19 @@ function BalanceTile({
       <Text style={{ ...styles.smallText, color: theme.pageTextLight }}>
         {label}
       </Text>
-      <Text
-        style={{
-          ...styles.tnum,
-          fontSize: 17,
-          fontWeight: 700,
-          color: tone === 'positive' ? theme.numberPositive : theme.pageText,
-          marginTop: 5,
-        }}
-      >
-        {value == null ? '—' : format(value, 'financial')}
-      </Text>
+      <PrivacyFilter includeNarrow>
+        <Text
+          style={{
+            ...styles.tnum,
+            fontSize: 17,
+            fontWeight: 700,
+            color: tone === 'positive' ? theme.numberPositive : theme.pageText,
+            marginTop: 5,
+          }}
+        >
+          {value == null ? '—' : format(value, 'financial')}
+        </Text>
+      </PrivacyFilter>
     </View>
   );
 }
@@ -83,7 +128,9 @@ export function MobileHomePage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const format = useFormat();
+  const dateFormat = useDateFormat() || 'MM/dd/yyyy';
   const {
+    accounts,
     activeAccounts,
     allBalance,
     onBudgetBalance,
@@ -91,8 +138,16 @@ export function MobileHomePage() {
     recentTransactions,
     payees,
     isLoading,
+    isError,
+    retry,
     syncStatus,
+    isSyncing,
+    syncState,
   } = useHomeData();
+  const accountNames = useMemo(
+    () => new Map(accounts.map(account => [account.id, account.name])),
+    [accounts],
+  );
   const payeeNames = useMemo(
     () => new Map(payees.map(payee => [payee.id, payee.name])),
     [payees],
@@ -140,19 +195,21 @@ export function MobileHomePage() {
                   color: theme.mobileHeaderTextSubdued,
                 }}
               >
-                {t('Money at a glance')}
+                <Trans>Money at a glance</Trans>
               </Text>
-              <Text
-                style={{
-                  ...styles.tnum,
-                  color: theme.mobileHeaderText,
-                  fontSize: 30,
-                  fontWeight: 700,
-                  marginTop: 4,
-                }}
-              >
-                {allBalance == null ? '—' : format(allBalance, 'financial')}
-              </Text>
+              <PrivacyFilter includeNarrow>
+                <Text
+                  style={{
+                    ...styles.tnum,
+                    color: theme.mobileHeaderText,
+                    fontSize: 30,
+                    fontWeight: 700,
+                    marginTop: 4,
+                  }}
+                >
+                  {allBalance == null ? '—' : format(allBalance, 'financial')}
+                </Text>
+              </PrivacyFilter>
               <Text
                 style={{
                   ...styles.smallText,
@@ -171,10 +228,14 @@ export function MobileHomePage() {
                 justifyContent: 'space-between',
               }}
             >
-              <SyncPill status={syncStatus} />
+              <SyncPill
+                status={syncStatus}
+                isSyncing={isSyncing}
+                syncState={syncState}
+              />
               <Button
                 variant="bare"
-                onPress={() => void navigate('/accounts')}
+                onPress={() => void navigate('/accounts/all')}
                 style={{
                   color: theme.mobileHeaderText,
                   minHeight: 36,
@@ -184,7 +245,7 @@ export function MobileHomePage() {
                 <Text
                   style={{ color: theme.mobileHeaderText, fontWeight: 600 }}
                 >
-                  {t('View accounts')}
+                  <Trans>View accounts</Trans>
                 </Text>
                 <SvgArrowThinRight
                   width={16}
@@ -226,6 +287,11 @@ export function MobileHomePage() {
             icon={<SvgReports width={19} height={19} />}
             onPress={() => void navigate('/reports')}
           />
+          <QuickAction
+            label={t('Ask Actuali')}
+            icon={<SvgChatBubbleDots width={19} height={19} />}
+            onPress={() => void navigate('/ask')}
+          />
         </View>
 
         <View style={{ marginTop: 24 }}>
@@ -240,37 +306,39 @@ export function MobileHomePage() {
             <Text
               style={{ fontSize: 18, fontWeight: 700, color: theme.pageText }}
             >
-              {t('Recent activity')}
+              <Trans>Recent activity</Trans>
             </Text>
             <Button
               variant="bare"
-              onPress={() => void navigate('/accounts')}
+              onPress={() => void navigate('/accounts/all')}
               style={{ minHeight: 36 }}
             >
               <Text style={{ color: theme.pageTextLink, fontWeight: 600 }}>
-                {t('See all')}
+                <Trans>See all</Trans>
               </Text>
             </Button>
           </View>
           <View className={surfaceClass} style={{ overflow: 'hidden' }}>
             {isLoading && <ActivitySkeleton />}
-            {!isLoading && recentTransactions.length === 0 && (
+            {isError && <ActivityError onRetry={retry} />}
+            {!isLoading && !isError && recentTransactions.length === 0 && (
               <View style={{ padding: 20, alignItems: 'center' }}>
                 <Text style={{ color: theme.pageTextLight }}>
-                  {t('Your latest transactions will appear here.')}
+                  <Trans>Your latest transactions will appear here.</Trans>
                 </Text>
               </View>
             )}
             {!isLoading &&
+              !isError &&
               recentTransactions.slice(0, 5).map((transaction, index) => {
                 const payee = transaction.payee
                   ? payeeNames.get(transaction.payee)
                   : null;
                 const label =
                   payee || transaction.notes || t('Uncategorized transaction');
-                const account = activeAccounts.find(
-                  item => item.id === transaction.account,
-                );
+                const accountName = transaction.account
+                  ? accountNames.get(transaction.account)
+                  : undefined;
                 return (
                   <Button
                     key={transaction.id}
@@ -304,24 +372,26 @@ export function MobileHomePage() {
                           marginTop: 2,
                         }}
                       >
-                        {account?.name || t('Account')} ·{' '}
-                        {transaction.date.slice(4, 6)}/
-                        {transaction.date.slice(6, 8)}
+                        {accountName || t('Account')} ·{' '}
+                        {formatHomeDate(transaction.date, dateFormat) ||
+                          t('Unknown date')}
                       </Text>
                     </View>
-                    <Text
-                      style={{
-                        ...styles.tnum,
-                        color:
-                          transaction.amount >= 0
-                            ? theme.numberPositive
-                            : theme.pageText,
-                        fontWeight: 600,
-                        marginLeft: 10,
-                      }}
-                    >
-                      {format(transaction.amount, 'financial-with-sign')}
-                    </Text>
+                    <PrivacyFilter includeNarrow>
+                      <Text
+                        style={{
+                          ...styles.tnum,
+                          color:
+                            transaction.amount >= 0
+                              ? theme.numberPositive
+                              : theme.pageText,
+                          fontWeight: 600,
+                          marginLeft: 10,
+                        }}
+                      >
+                        {format(transaction.amount, 'financial-with-sign')}
+                      </Text>
+                    </PrivacyFilter>
                   </Button>
                 );
               })}
@@ -342,9 +412,17 @@ export function MobileHomePage() {
             style={{ color: theme.pageTextLight }}
           />
           <Text style={{ ...styles.smallText, color: theme.pageTextLight }}>
-            {syncStatus === 'online'
-              ? t('Changes sync automatically across every device.')
-              : t('You can keep working safely while offline.')}
+            {isSyncing
+              ? t('Syncing your latest changes…')
+              : syncState === 'error'
+                ? t('Sync needs attention. Your local changes are safe.')
+                : syncState === 'disabled'
+                  ? t('Sync is disabled. Changes stay on this device.')
+                  : syncStatus === 'online'
+                    ? t(
+                        'Connected to sync server. Changes sync when available.',
+                      )
+                    : t('You can keep working safely while offline.')}
           </Text>
         </View>
       </View>
@@ -359,13 +437,14 @@ function QuickAction({
   accent = false,
 }: {
   label: string;
-  icon: React.ReactNode;
+  icon: ReactNode;
   onPress: () => void;
   accent?: boolean;
 }) {
   return (
     <Button
       onPress={onPress}
+      className={actionClass}
       variant={accent ? 'primary' : 'normal'}
       style={{
         flex: 1,
@@ -380,6 +459,25 @@ function QuickAction({
         {label}
       </Text>
     </Button>
+  );
+}
+
+function ActivityError({ onRetry }: { onRetry: () => Promise<void> }) {
+  return (
+    <View style={{ padding: 20, alignItems: 'center', gap: 9 }}>
+      <Text style={{ color: theme.pageTextLight, textAlign: 'center' }}>
+        <Trans>We couldn't load your latest activity.</Trans>
+      </Text>
+      <Button
+        variant="bare"
+        onPress={() => void onRetry()}
+        style={{ minHeight: 34 }}
+      >
+        <Text style={{ color: theme.pageTextLink, fontWeight: 600 }}>
+          <Trans>Try again</Trans>
+        </Text>
+      </Button>
+    </View>
   );
 }
 

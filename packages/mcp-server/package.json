@@ -1,0 +1,32 @@
+{
+  "name": "@actual-app/mcp-server",
+  "version": "0.1.0",
+  "description": "Read-only Model Context Protocol server for an Actual budget",
+  "license": "MIT",
+  "bin": {
+    "actuali-mcp": "dist/src/bin.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "dist/src/index.js",
+  "scripts": {
+    "build": "tsgo -p tsconfig.json",
+    "start": "node dist/src/bin.js",
+    "test": "vitest --run",
+    "typecheck": "tsgo -b"
+  },
+  "dependencies": {
+    "@actual-app/api": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "@typescript/native-preview": "beta",
+    "vite": "^8.1.5",
+    "vitest": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

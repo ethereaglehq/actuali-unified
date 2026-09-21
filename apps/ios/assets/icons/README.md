@@ -8,11 +8,11 @@ Designed and contributed by Reddit user
 
 ## Files
 
-| File | What it is |
-|-|-|
-| `actuali-appicon.svg` | Vector master. 1024×1024, the mark centred on the purple gradient, square with no corner rounding. |
-| `actuali-appicon-1024.png` | `actuali-appicon.svg` rendered at 1024×1024, sRGB, opaque, no alpha. What ships as the app icon. |
-| `actuali-mark.svg` | The bare mark as supplied, 767.55×708.47, no fill specified — set `fill` at the point of use. |
+| File                       | What it is                                                                                         |
+| -------------------------- | -------------------------------------------------------------------------------------------------- |
+| `actuali-appicon.svg`      | Vector master. 1024×1024, the mark centred on the purple gradient, square with no corner rounding. |
+| `actuali-appicon-1024.png` | `actuali-appicon.svg` rendered at 1024×1024, sRGB, opaque, no alpha. What ships as the app icon.   |
+| `actuali-mark.svg`         | The bare mark as supplied, 767.55×708.47, no fill specified — set `fill` at the point of use.      |
 
 The mark is an original design in the spirit of Actual's, not Actual's asset.
 Their logo is a hairline-stroke asymmetric "A" with a tail; this is a thick,

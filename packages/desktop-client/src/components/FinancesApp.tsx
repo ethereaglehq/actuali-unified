@@ -269,6 +269,18 @@ export function FinancesApp() {
                     <Route path="/reports/*" element={<Reports />} />
 
                     <Route
+                      path="/ask"
+                      element={
+                        <ErrorBoundary
+                          FallbackComponent={FeatureErrorFallback}
+                          resetKeys={[location.pathname]}
+                        >
+                          <NarrowAlternate name="AskActuali" />
+                        </ErrorBoundary>
+                      }
+                    />
+
+                    <Route
                       path="/budget"
                       element={
                         <ErrorBoundary
