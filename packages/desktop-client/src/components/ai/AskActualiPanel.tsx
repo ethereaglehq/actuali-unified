@@ -88,13 +88,16 @@ export function AskActualiPanel({ compact = false }: { compact?: boolean }) {
         'Current balances and at most seven recent transactions. This is not a full month, budget availability, or a spending trend.',
       amounts:
         'Formatted in the budget display currency. Transfers may be present. Do not treat all outflows as expenses.',
-      total: format(allBalance, 'financial'),
-      onBudget: format(onBudgetBalance, 'financial'),
-      offBudget: format(offBudgetBalance, 'financial'),
+      privacyMode,
+      total: privacyMode ? null : format(allBalance, 'financial'),
+      onBudget: privacyMode ? null : format(onBudgetBalance, 'financial'),
+      offBudget: privacyMode ? null : format(offBudgetBalance, 'financial'),
       accountCount: activeAccounts.length,
       recentTransactions: recentTransactions.map(transaction => ({
         date: transaction.date,
-        amount: format(transaction.amount, 'financial-with-sign'),
+        amount: privacyMode
+          ? null
+          : format(transaction.amount, 'financial-with-sign'),
         payee:
           redactLabels || privacyMode
             ? null
@@ -522,6 +525,12 @@ export function AskActualiPanel({ compact = false }: { compact?: boolean }) {
           aria-label={t('Ask Actuali a question')}
           value={prompt}
           onChange={event => setPrompt(event.target.value)}
+          onKeyDown={event => {
+            if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+              event.preventDefault();
+              void ask();
+            }
+          }}
           maxLength={4000}
           disabled={pending}
           placeholder={t(
@@ -575,7 +584,10 @@ export function AskActualiPanel({ compact = false }: { compact?: boolean }) {
         >
           <Trans>
             Only this question, current balances, and up to seven recent
-            transactions are sent after you press Send.
+            transactions are sent after you press Send.{' '}
+            {privacyMode
+              ? t('Privacy mode excludes balances and transaction amounts.')
+              : t('Amounts remain visible to the endpoint you choose.')}
           </Trans>
         </Text>
         <View
@@ -733,7 +745,19 @@ function readCompletion(value: unknown): string | null {
   if (!message || typeof message !== 'object' || !('content' in message)) {
     return null;
   }
-  return typeof message.content === 'string' && message.content.trim()
-    ? message.content
-    : null;
+  if (typeof message.content === 'string') {
+    return message.content.trim() ? message.content : null;
+  }
+  if (Array.isArray(message.content)) {
+    const text = message.content
+      .filter(
+        (part): part is { type?: unknown; text?: unknown } =>
+          Boolean(part) && typeof part === 'object',
+      )
+      .filter(part => part.type === 'text' && typeof part.text === 'string')
+      .map(part => part.text)
+      .join('');
+    return text.trim() ? text : null;
+  }
+  return null;
 }
