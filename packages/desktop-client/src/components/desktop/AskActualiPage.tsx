@@ -6,12 +6,12 @@ import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
 
 import { AskActualiPanel } from '#components/ai/AskActualiPanel';
-import { PageHeader } from '#components/Page';
 
 export function AskActualiPage() {
   const { t } = useTranslation();
   return (
     <View
+      role="main"
       style={{
         flex: 1,
         overflow: 'auto',
@@ -25,11 +25,16 @@ export function AskActualiPage() {
           alignSelf: 'center',
           padding: '30px 34px 46px',
           gap: 8,
+          display: 'block',
+          flex: '0 0 auto',
+          minHeight: 'max-content',
         }}
       >
-        <PageHeader title={t('Ask Actuali')} style={{ marginLeft: 0 }} />
+        <h1 style={{ fontSize: 25, fontWeight: 600, margin: '0 0 6px' }}>
+          {t('Ask Actuali')}
+        </h1>
         <Text style={{ ...styles.smallText, color: theme.pageTextLight }}>
-          <Trans>Private, explainable help for your money decisions.</Trans>
+          <Trans>Understand your budget with a model you choose.</Trans>
         </Text>
         <View style={{ marginTop: 18 }}>
           <AskActualiPanel />

@@ -17,6 +17,7 @@ import { app as authApp } from './auth/app';
 import { app as budgetApp } from './budget/app';
 import { app as budgetFilesApp } from './budgetfiles/app';
 import { app as dashboardApp } from './dashboard/app';
+import { app as dataTransferApp } from './data-transfer/app';
 import * as db from './db';
 import * as encryption from './encryption';
 import { app as encryptionApp } from './encryption/app';
@@ -152,6 +153,7 @@ app.combine(
   budgetFilesApp,
   encryptionApp,
   tagsApp,
+  dataTransferApp,
 );
 
 export function getDefaultDocumentDir() {

@@ -30,6 +30,7 @@ import { AuthSettings } from './AuthSettings';
 import { Backups } from './Backups';
 import { BudgetTypeSettings } from './BudgetTypeSettings';
 import { CurrencySettings } from './Currency';
+import { DataTransfer } from './DataTransfer';
 import { EncryptionSettings } from './Encryption';
 import { ExperimentalFeatures } from './Experimental';
 import { ExportBudget } from './Export';
@@ -266,6 +267,7 @@ export function Settings() {
         <BudgetTypeSettings />
         {isElectron() && <Backups />}
         <ExportBudget />
+        <DataTransfer />
         <AdvancedToggle>
           <AdvancedAbout />
           <ResetCache />

@@ -80,10 +80,19 @@ export function ExportBudget() {
     >
       <Text>
         <Trans>
-          <strong>Export</strong> your data as a zip file containing{' '}
-          <code>db.sqlite</code> and <code>metadata.json</code> files. It can be
-          imported into another Actual instance by closing an open file (if
-          any), then clicking the "Import file" button, then choosing "Actual."
+          <strong>Export</strong> a complete, portable budget backup as a zip
+          file containing <code>db.sqlite</code> and <code>metadata.json</code>.
+          The backup keeps your accounts, transactions, payees, payee rules,
+          tags, schedules, categories, and budget settings together so every
+          device can restore the same data.
+        </Trans>
+      </Text>
+      <Text>
+        <Trans>
+          Reports can be exported from the report toolbar, and saved report
+          dashboards can be imported there. To restore a full budget, close the
+          current file, choose <strong>Import file</strong>, and select an
+          Actual backup.
         </Trans>
       </Text>
       {encryptKeyId ? (

@@ -8,3 +8,5 @@
 - [`ROADMAP.md`](ROADMAP.md) — feature priorities derived from the existing Actual and Actuali surfaces.
 
 When a feature changes data, update the shared core and its sync coverage first. When it changes interaction, add the narrow and wide surfaces independently while preserving the same route intent and mutation.
+
+- [`IMPORT_EXPORT.md`](IMPORT_EXPORT.md) — selective JSON transfer for payees, rules, tags, schedules, and saved reports.

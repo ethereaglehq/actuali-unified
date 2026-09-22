@@ -9,8 +9,8 @@ import { Text } from '@actual-app/components/text';
 import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
 
+import { Link } from '#components/common/Link';
 import { useHomeData } from '#components/home/useHomeData';
-import { PrivacyFilter } from '#components/PrivacyFilter';
 import { useFormat } from '#hooks/useFormat';
 import { useSyncedPref } from '#hooks/useSyncedPref';
 
@@ -24,6 +24,7 @@ export function AskActualiPanel({ compact = false }: { compact?: boolean }) {
   const [answer, setAnswer] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [connectionOpen, setConnectionOpen] = useState(false);
   const controller = useRef<AbortController | null>(null);
   const requestVersion = useRef(0);
   const [privacyPref, setPrivacyPref] = useSyncedPref('isPrivacyEnabled');
@@ -127,6 +128,7 @@ export function AskActualiPanel({ compact = false }: { compact?: boolean }) {
         redirect: 'error',
         referrerPolicy: 'no-referrer',
       });
+      if (current !== requestVersion.current || abort.signal.aborted) return;
       if (!response.ok) {
         setError(
           t(
@@ -137,6 +139,7 @@ export function AskActualiPanel({ compact = false }: { compact?: boolean }) {
         return;
       }
       const data: unknown = await response.json();
+      if (current !== requestVersion.current || abort.signal.aborted) return;
       const text = readCompletion(data);
       if (!text) {
         setError(
@@ -166,151 +169,354 @@ export function AskActualiPanel({ compact = false }: { compact?: boolean }) {
     }
   }
 
+  const suggestions = [
+    t('What do my latest transactions show?'),
+    t('How much money is on budget right now?'),
+  ];
+
   return (
-    <View style={{ gap: compact ? 14 : 20, width: '100%', minWidth: 0 }}>
+    <View
+      data-testid="ask-panel"
+      style={{
+        display: 'block',
+        flexShrink: 0,
+        width: '100%',
+        minWidth: 0,
+        lineHeight: 1.5,
+      }}
+    >
       <View
+        data-testid="ask-context"
         style={{
-          padding: compact ? 16 : 22,
-          borderRadius: 14,
+          display: 'block',
+          padding: compact ? 16 : 24,
+          borderRadius: 16,
           border: `1px solid ${theme.tableBorder}`,
           backgroundColor: theme.tableBackground,
-          gap: 14,
         }}
       >
-        <Text style={{ fontSize: compact ? 18 : 22, fontWeight: 700 }}>
+        <Text style={{ fontSize: compact ? 20 : 24, fontWeight: 700 }}>
           <Trans>A clearer view of your money</Trans>
         </Text>
-        <Text style={{ ...styles.smallText, color: theme.pageTextLight }}>
-          <Trans>
-            Ask about your current balances and latest seven transactions. For
-            monthly trends, use Reports.
-          </Trans>
-        </Text>
-        <View
+        <Text
           style={{
-            padding: 12,
-            backgroundColor: theme.pageBackground,
-            borderRadius: 8,
-            gap: 6,
+            ...styles.smallText,
+            color: theme.pageTextLight,
+            display: 'block',
+            marginTop: 6,
           }}
         >
-          <Text style={{ fontWeight: 600 }}>
+          <Trans>
+            Ask about your current balances and latest transactions. Answers use
+            a small local snapshot and never change your budget.
+          </Trans>
+        </Text>
+
+        <View
+          style={{
+            display: 'block',
+            marginTop: 18,
+            padding: 14,
+            borderRadius: 12,
+            backgroundColor: theme.pageBackground,
+            border: `1px solid ${theme.tableBorder}`,
+          }}
+        >
+          <Text style={{ fontWeight: 700, display: 'block' }}>
             <Trans>Local snapshot</Trans>
           </Text>
           {isError ? (
-            <Button onPress={() => void retry()}>
-              <Trans>Retry loading budget</Trans>
-            </Button>
+            <View style={{ display: 'block', marginTop: 8 }}>
+              <Text
+                style={{
+                  ...styles.smallText,
+                  color: theme.errorText,
+                  display: 'block',
+                }}
+              >
+                <Trans>We couldn't read this budget right now.</Trans>
+              </Text>
+              <Button onPress={() => void retry()} style={{ marginTop: 10 }}>
+                <Trans>Retry loading budget</Trans>
+              </Button>
+            </View>
           ) : isLoading || allBalance === null ? (
-            <Text>
+            <Text
+              style={{
+                ...styles.smallText,
+                color: theme.pageTextLight,
+                display: 'block',
+                marginTop: 8,
+              }}
+            >
               <Trans>Loading your budget...</Trans>
             </Text>
           ) : (
-            <PrivacyFilter includeNarrow>
-              <Text style={styles.tnum}>
-                {t('{{balance}} across {{count}} active accounts', {
-                  balance: format(allBalance, 'financial'),
+            <View
+              style={{
+                display: 'flex',
+                flexDirection: 'row',
+                flexWrap: 'wrap',
+                alignItems: 'baseline',
+                gap: '4px 16px',
+                marginTop: 8,
+              }}
+            >
+              <Text
+                style={{ ...styles.tnum, display: 'block', fontWeight: 700 }}
+              >
+                {privacyMode
+                  ? t('Balance hidden')
+                  : format(allBalance, 'financial')}
+              </Text>
+              <Text style={{ ...styles.smallText, color: theme.pageTextLight }}>
+                {t('{{count}} active accounts', {
                   count: activeAccounts.length,
                 })}
               </Text>
-            </PrivacyFilter>
+              <Text
+                style={{
+                  ...styles.smallText,
+                  ...styles.tnum,
+                  color: theme.pageTextLight,
+                }}
+              >
+                {privacyMode
+                  ? t('On-budget balance hidden')
+                  : t('{{balance}} on budget', {
+                      balance: format(onBudgetBalance, 'financial'),
+                    })}
+              </Text>
+            </View>
           )}
-          <Text style={{ ...styles.smallText, color: theme.pageTextLight }}>
+          <Text
+            style={{
+              ...styles.smallText,
+              color: theme.pageTextLight,
+              display: 'block',
+              marginTop: 8,
+            }}
+          >
             <Trans>
-              This summary is calculated locally. No model has received your
-              data.
+              Calculated locally. Shared only when you send a question.
             </Trans>
           </Text>
         </View>
-        <details open>
-          <summary
-            style={{ cursor: 'pointer', padding: '8px 0', fontWeight: 600 }}
-          >
-            <Trans>Model connection</Trans>
-          </summary>
-          <View style={{ gap: 10, paddingTop: 8 }}>
-            <label htmlFor="ask-endpoint">
-              <Trans>API base URL</Trans>
-            </label>
-            <Input
-              id="ask-endpoint"
-              type="url"
-              value={endpoint}
-              onChangeValue={setEndpoint}
-              disabled={pending}
-              style={{ minHeight: 44, width: '100%', minWidth: 0 }}
-            />
-            <label htmlFor="ask-model">
-              <Trans>Model name</Trans>
-            </label>
-            <Input
-              id="ask-model"
-              value={model}
-              onChangeValue={setModel}
-              disabled={pending}
-              placeholder={t('Enter a model available on your endpoint')}
-              style={{ minHeight: 44, width: '100%', minWidth: 0 }}
-            />
-            <label htmlFor="ask-key">
-              <Trans>API key (optional for local models)</Trans>
-            </label>
-            <Input
-              id="ask-key"
-              type="password"
-              value={apiKey}
-              onChangeValue={setApiKey}
-              disabled={pending}
-              autoComplete="off"
-              style={{ minHeight: 44, width: '100%', minWidth: 0 }}
-            />
-            <Text style={{ ...styles.smallText, color: theme.pageTextLight }}>
-              <Trans>
-                Use a local Ollama model or your own OpenAI-compatible gateway
-                with browser access enabled. Connection details and keys stay in
-                memory and are cleared when you leave this page.
-              </Trans>
-            </Text>
-          </View>
-        </details>
-        <label
+
+        <View
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 9,
-            minHeight: 44,
+            display: 'block',
+            marginTop: 18,
+            paddingTop: 16,
+            borderTop: `1px solid ${theme.tableBorder}`,
           }}
         >
-          <input
-            type="checkbox"
-            checked={redactLabels}
-            disabled={pending || privacyMode}
-            onChange={event => setRedactLabels(event.target.checked)}
-          />
-          <Trans>Remove merchant labels from AI context</Trans>
-        </label>
-        <label
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 9,
-            minHeight: 44,
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={privacyMode}
-            onChange={event => {
-              setAnswer(null);
-              setError(null);
-              controller.current?.abort();
-              void setPrivacyPref(String(event.target.checked));
+          <View
+            style={{
+              display: 'flex',
+              flexDirection: compact ? 'column' : 'row',
+              alignItems: compact ? 'stretch' : 'center',
+              justifyContent: 'space-between',
+              gap: 12,
             }}
-          />
-          <Trans>Privacy mode: hide financial values on screen</Trans>
-        </label>
-        <label htmlFor="ask-question">
-          <Trans>Your question</Trans>
-        </label>
+          >
+            <View style={{ display: 'block', minWidth: 0 }}>
+              <Text style={{ fontWeight: 700, display: 'block' }}>
+                <Trans>Model connection</Trans>
+              </Text>
+              <Text
+                style={{
+                  ...styles.smallText,
+                  color: theme.pageTextLight,
+                  display: 'block',
+                  marginTop: 4,
+                }}
+              >
+                {model.trim()
+                  ? t('Model: {{model}}', { model: model.trim() })
+                  : t('Add a model endpoint before sending a question.')}
+              </Text>
+            </View>
+            <Button
+              onPress={() => setConnectionOpen(value => !value)}
+              style={{ minHeight: 44, flexShrink: 0 }}
+              aria-expanded={connectionOpen}
+              aria-controls="ask-model-connection"
+            >
+              <Trans>
+                {connectionOpen
+                  ? 'Hide connection'
+                  : model.trim()
+                    ? 'Edit connection'
+                    : 'Connect a model'}
+              </Trans>
+            </Button>
+          </View>
+          {connectionOpen && (
+            <View
+              id="ask-model-connection"
+              style={{
+                display: 'block',
+                marginTop: 12,
+                padding: compact ? 12 : 16,
+                borderRadius: 12,
+                backgroundColor: theme.pageBackground,
+                border: `1px solid ${theme.tableBorder}`,
+              }}
+            >
+              <View
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: compact
+                    ? '1fr'
+                    : 'minmax(0, 1fr) minmax(0, 1fr)',
+                  gap: 12,
+                }}
+              >
+                <View style={{ display: 'block', minWidth: 0 }}>
+                  <label htmlFor="ask-endpoint">
+                    <Trans>API base URL</Trans>
+                  </label>
+                  <Input
+                    id="ask-endpoint"
+                    type="url"
+                    value={endpoint}
+                    onChangeValue={setEndpoint}
+                    disabled={pending}
+                    style={{
+                      minHeight: 44,
+                      width: '100%',
+                      minWidth: 0,
+                      marginTop: 6,
+                    }}
+                  />
+                </View>
+                <View style={{ display: 'block', minWidth: 0 }}>
+                  <label htmlFor="ask-model">
+                    <Trans>Model name</Trans>
+                  </label>
+                  <Input
+                    id="ask-model"
+                    value={model}
+                    onChangeValue={setModel}
+                    disabled={pending}
+                    placeholder={t('For example, llama3.2')}
+                    style={{
+                      minHeight: 44,
+                      width: '100%',
+                      minWidth: 0,
+                      marginTop: 6,
+                    }}
+                  />
+                </View>
+              </View>
+              <View style={{ display: 'block', marginTop: 12 }}>
+                <label htmlFor="ask-key">
+                  <Trans>API key (optional)</Trans>
+                </label>
+                <Input
+                  id="ask-key"
+                  type="password"
+                  value={apiKey}
+                  onChangeValue={setApiKey}
+                  disabled={pending}
+                  autoComplete="off"
+                  style={{
+                    minHeight: 44,
+                    width: '100%',
+                    minWidth: 0,
+                    marginTop: 6,
+                  }}
+                />
+              </View>
+              <Text
+                style={{
+                  ...styles.smallText,
+                  color: theme.pageTextLight,
+                  display: 'block',
+                  marginTop: 10,
+                }}
+              >
+                <Trans>
+                  Use a local Ollama model or an HTTPS OpenAI-compatible
+                  endpoint. These details stay in memory and are cleared when
+                  you leave.
+                </Trans>
+              </Text>
+            </View>
+          )}
+        </View>
+        <View
+          style={{
+            display: 'flex',
+            flexDirection: compact ? 'column' : 'row',
+            flexWrap: 'wrap',
+            gap: 8,
+            marginTop: 14,
+          }}
+        >
+          <label
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              minHeight: 44,
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={privacyMode || redactLabels}
+              disabled={pending || privacyMode}
+              onChange={event => setRedactLabels(event.target.checked)}
+            />
+            <Trans>Hide merchant names from AI context</Trans>
+          </label>
+          <label
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              minHeight: 44,
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={privacyMode}
+              onChange={event => {
+                setAnswer(null);
+                setError(null);
+                requestVersion.current += 1;
+                controller.current?.abort();
+                controller.current = null;
+                setPending(false);
+                void setPrivacyPref(String(event.target.checked));
+              }}
+            />
+            <Trans>Privacy mode</Trans>
+          </label>
+        </View>
+      </View>
+
+      <View
+        data-testid="ask-composer"
+        style={{
+          display: 'block',
+          marginTop: compact ? 14 : 18,
+          padding: compact ? 16 : 24,
+          borderRadius: 16,
+          border: `1px solid ${theme.tableBorder}`,
+          backgroundColor: theme.pageBackground,
+        }}
+      >
+        <Text
+          style={{
+            fontSize: compact ? 18 : 20,
+            fontWeight: 700,
+            display: 'block',
+          }}
+        >
+          <Trans>What would you like to understand?</Trans>
+        </Text>
         <TextArea
           id="ask-question"
           aria-label={t('Ask Actuali a question')}
@@ -318,27 +524,70 @@ export function AskActualiPanel({ compact = false }: { compact?: boolean }) {
           onChange={event => setPrompt(event.target.value)}
           maxLength={4000}
           disabled={pending}
-          placeholder={t('What do my latest transactions show?')}
+          placeholder={t(
+            'Try a question about your latest activity or balances',
+          )}
           rows={compact ? 4 : 5}
           style={{
             ...baseInputStyle,
             width: '100%',
-            minHeight: 112,
+            minHeight: 116,
             resize: 'vertical',
-            padding: 12,
+            padding: 14,
             borderRadius: 10,
             boxSizing: 'border-box',
             fontSize: 16,
+            marginTop: 12,
           }}
         />
-        <Text style={{ ...styles.smallText, color: theme.pageTextLight }}>
+        <View
+          style={{
+            display: 'flex',
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            gap: 8,
+            marginTop: 10,
+          }}
+        >
+          {suggestions.map(suggestion => (
+            <Button
+              key={suggestion}
+              onPress={() => setPrompt(suggestion)}
+              isDisabled={pending}
+              style={{
+                minHeight: 44,
+                maxWidth: '100%',
+                whiteSpace: 'normal',
+                textAlign: 'left',
+              }}
+            >
+              {suggestion}
+            </Button>
+          ))}
+        </View>
+        <Text
+          style={{
+            ...styles.smallText,
+            color: theme.pageTextLight,
+            display: 'block',
+            marginTop: 12,
+          }}
+        >
           <Trans>
-            Sending shares this question, balances, and up to seven transactions
-            with the endpoint above. Amounts and dates are included even when
-            labels are removed. Nothing is sent until you press Send.
+            Only this question, current balances, and up to seven recent
+            transactions are sent after you press Send.
           </Trans>
         </Text>
-        <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>
+        <View
+          style={{
+            display: 'flex',
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            gap: 10,
+            marginTop: 14,
+          }}
+        >
           <Button
             variant="primary"
             isDisabled={pending || !ready || !prompt.trim() || !model.trim()}
@@ -355,17 +604,30 @@ export function AskActualiPanel({ compact = false }: { compact?: boolean }) {
               <Trans>Cancel</Trans>
             </Button>
           )}
+          {!model.trim() && (
+            <Text style={{ ...styles.smallText, color: theme.pageTextLight }}>
+              <Trans>Connect a model first.</Trans>
+            </Text>
+          )}
         </View>
-        <View aria-live="polite" aria-busy={pending} style={{ gap: 8 }}>
+        <View
+          aria-live="polite"
+          aria-busy={pending}
+          style={{ display: 'block', marginTop: 16 }}
+        >
           {pending && (
-            <Text>
+            <Text style={{ display: 'block' }}>
               <Trans>Waiting for your model...</Trans>
             </Text>
           )}
           {error && (
             <Text
               role="alert"
-              style={{ color: theme.errorText, overflowWrap: 'anywhere' }}
+              style={{
+                color: theme.errorText,
+                display: 'block',
+                overflowWrap: 'anywhere',
+              }}
             >
               {error}
             </Text>
@@ -373,25 +635,39 @@ export function AskActualiPanel({ compact = false }: { compact?: boolean }) {
           {answer && (
             <View
               style={{
+                display: 'block',
+                marginTop: 12,
                 padding: 14,
-                borderRadius: 10,
-                backgroundColor: theme.pageBackground,
-                gap: 8,
+                borderRadius: 12,
+                backgroundColor: theme.tableBackground,
+                border: `1px solid ${theme.tableBorder}`,
               }}
             >
-              <Text style={{ fontWeight: 600 }}>
+              <Text style={{ fontWeight: 700, display: 'block' }}>
                 <Trans>Model response</Trans>
               </Text>
-              <PrivacyFilter includeNarrow>
-                <Text
-                  style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
-                >
-                  {answer}
-                </Text>
-              </PrivacyFilter>
-              <Text style={{ ...styles.smallText, color: theme.pageTextLight }}>
+              <Text
+                style={{
+                  whiteSpace: 'pre-wrap',
+                  overflowWrap: 'anywhere',
+                  display: 'block',
+                  marginTop: 8,
+                }}
+              >
+                {privacyMode
+                  ? t('Response hidden while privacy mode is on.')
+                  : answer}
+              </Text>
+              <Text
+                style={{
+                  ...styles.smallText,
+                  color: theme.pageTextLight,
+                  display: 'block',
+                  marginTop: 10,
+                }}
+              >
                 <Trans>
-                  Check this answer against your budget. The assistant cannot
+                  Review this answer against your budget. Ask Actuali cannot
                   make changes.
                 </Trans>
               </Text>
@@ -399,27 +675,42 @@ export function AskActualiPanel({ compact = false }: { compact?: boolean }) {
           )}
         </View>
       </View>
+
       <View
+        data-testid="ask-mcp"
         style={{
-          padding: compact ? 16 : 22,
+          display: 'block',
+          marginTop: compact ? 14 : 18,
+          padding: compact ? 16 : 20,
           borderRadius: 14,
           border: `1px solid ${theme.tableBorder}`,
-          gap: 10,
         }}
       >
-        <Text style={{ fontSize: 16, fontWeight: 700 }}>
+        <Text style={{ fontSize: 16, fontWeight: 700, display: 'block' }}>
           <Trans>Connect your AI through MCP</Trans>
         </Text>
-        <Text style={{ ...styles.smallText, color: theme.pageTextLight }}>
+        <Text
+          style={{
+            ...styles.smallText,
+            color: theme.pageTextLight,
+            display: 'block',
+            marginTop: 6,
+          }}
+        >
           <Trans>
-            The optional Actuali MCP server gives compatible desktop assistants
-            read access to your budget. Configure it in your AI client using the
-            repository setup guide.
+            The optional Actuali MCP server gives compatible assistants
+            read-only access to your budget. The repository includes setup and
+            security guidance.
           </Trans>
         </Text>
-        <Text style={{ color: theme.pageTextLink }}>
-          <Trans>See docs/MCP_SETUP.md in the repository for MCP setup.</Trans>
-        </Text>
+        <View style={{ display: 'block', marginTop: 8 }}>
+          <Link
+            variant="external"
+            to="https://github.com/ethereaglehq/actuali-unified/blob/main/docs/MCP_SETUP.md"
+          >
+            <Trans>Read the MCP setup guide</Trans>
+          </Link>
+        </View>
       </View>
     </View>
   );
